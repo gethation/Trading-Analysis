@@ -8,12 +8,12 @@ exchange = ccxt.binance({
 })
 
 symbol    = 'PAXG/USDT'
-timeframe = '15m'
+timeframe = '5m'
 mark      = ''
-since     = exchange.parse8601('2025-12-26T00:00:00Z')
+since     = exchange.parse8601('2025-12-20T00:00:00Z')
 limit     = 1000
 until     = None
-until     = exchange.parse8601('2025-12-30T00:00:00Z')
+until     = exchange.parse8601('2025-12-26T00:00:00Z')
 
 ms_per_candle = exchange.parse_timeframe(timeframe) * 1000
 

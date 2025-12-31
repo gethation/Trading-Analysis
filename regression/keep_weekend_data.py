@@ -76,6 +76,6 @@ def filter_weekend_parquet(in_path: str, out_path: str):
 
 if __name__ == "__main__":
     filter_weekend_parquet(
-        in_path="data/PAXG_15m.parquet",
-        out_path="data/PAXG_15m_weekend.parquet",
+        in_path="data/PAXG_5m.parquet",
+        out_path="data/PAXG_5m_weekend.parquet",
     )
