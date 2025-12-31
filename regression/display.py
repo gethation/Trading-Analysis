@@ -120,7 +120,7 @@ def plot_ohlcv_with_mas(df: pd.DataFrame, ma_cols: list[str], title: str):
 
 
 if __name__ == "__main__":
-    path = r"data/PAXG_5m_weekend.parquet"
+    path = r"data/PAXG_1m_weekend.parquet"
     df = load_ohlcv_parquet(path)
 
     window = 100

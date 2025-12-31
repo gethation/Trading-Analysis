@@ -8,7 +8,7 @@ exchange = ccxt.binance({
 })
 
 symbol    = 'PAXG/USDT'
-timeframe = '5m'
+timeframe = '1m'
 mark      = ''
 since     = exchange.parse8601('2025-12-20T00:00:00Z')
 limit     = 1000
