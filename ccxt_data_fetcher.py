@@ -132,6 +132,11 @@ def download_ohlcv_binance_futures(
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    df = df.sort_index()
+    dup = df.index.duplicated(keep="last")
+    if dup.any():
+        df = df[~dup]
+
     base_name = f"{symbol.split('/')[0]}_{timeframe}"
     if mark:
         base_name = f"{base_name}({mark})"
@@ -155,7 +160,7 @@ if __name__ == "__main__":
 
     df, csv_path, pq_path = download_ohlcv_binance_futures(
         symbol="PAXG/USDT",
-        timeframe="1m",
+        timeframe="5m",
         since="2025-12-20T00:00:00Z",
         until="2025-12-26T00:00:00Z",
         exchange=exchange,

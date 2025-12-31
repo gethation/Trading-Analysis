@@ -120,11 +120,11 @@ def plot_ohlcv_with_mas(df: pd.DataFrame, ma_cols: list[str], title: str):
 
 
 if __name__ == "__main__":
-    path = r"data/PAXG_1m_weekend.parquet"
+    path = r"data/PAXG_5m_weekend.parquet"
     df = load_ohlcv_parquet(path)
 
-    window = 100
-    alpha = 0.5  # 你可調：越小越貼近 17:00 close
+    window = 500
+    alpha = 0.5
 
     df = add_padded_and_blended_ma_weekend(df, window=window, alpha=alpha)
 
