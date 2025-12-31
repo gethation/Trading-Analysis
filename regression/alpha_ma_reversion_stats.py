@@ -21,8 +21,11 @@ def load_ohlcv_parquet(path: str) -> pd.DataFrame:
     df.index = pd.DatetimeIndex(df.index)
     df = df.sort_index()
 
-    rename_map = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
-    # 若已是大寫就不動
+    if df.index.has_duplicates:
+        dup_n = int(df.index.duplicated(keep="last").sum())
+        print(f"[WARN] index has duplicates: {dup_n} rows -> keep last")
+        df = df[~df.index.duplicated(keep="last")].copy()
+
     lower_cols = {c.lower(): c for c in df.columns}
     if "open" in lower_cols and "Open" not in df.columns:
         df = df.rename(columns={lower_cols["open"]: "Open"})
@@ -40,7 +43,10 @@ def load_ohlcv_parquet(path: str) -> pd.DataFrame:
     if miss:
         raise ValueError(f"缺少欄位: {miss}")
 
+    df = df[["Open", "High", "Low", "Close", "Volume"]]
+
     return df
+
 
 
 # ------------------------
@@ -293,7 +299,7 @@ if __name__ == "__main__":
 
 
     window = 500
-    alpha = 0.25
+    alpha = 0.0
     bin_size_pct = 0.02
 
     df = load_ohlcv_parquet(path)
