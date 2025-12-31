@@ -1,5 +1,16 @@
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import pandas as pd
+import ccxt
+import ccxt_data_fetcher
+
+
+
 
 
 def load_df_from_parquet(path: str) -> pd.DataFrame:
@@ -71,11 +82,43 @@ def filter_weekend_parquet(in_path: str, out_path: str):
 
     print(f"input rows : {len(df)}")
     print(f"output rows: {len(out)}")
-    print(f"saved -> {out_path}")
+
+
+from pathlib import Path
+import ccxt
+
+# 假設 filter_weekend_parquet 支援傳 Path 或 str
+# def filter_weekend_parquet(in_path, out_path): ...
 
 
 if __name__ == "__main__":
-    filter_weekend_parquet(
-        in_path="data/PAXG_1m.parquet",
-        out_path="data/PAXG_1m_weekend.parquet",
+    data_dir = Path("data")
+
+    exchange = ccxt.binance({
+        "enableRateLimit": True,
+        "options": {"defaultType": "future"},
+    })
+
+    df, csv_path, pq_path = ccxt_data_fetcher.download_ohlcv_binance_futures(
+        symbol="PAXG/USDT",
+        timeframe="1m",
+        since="2025-11-01T00:00:00Z",
+        until="2025-12-30T00:00:00Z",
+        exchange=exchange,
+        save_dir=data_dir,
+        mark="",
+        save_csv=False,
+        save_parquet=True,
     )
+
+    in_path = Path(pq_path)
+    out_path = in_path.with_name(in_path.stem + "_weekend" + in_path.suffix)
+
+    filter_weekend_parquet(
+        in_path=in_path,
+        out_path=out_path,
+    )
+
+    print("Input :", in_path)
+    print("saved ->", out_path)
+

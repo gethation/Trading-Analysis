@@ -291,8 +291,9 @@ def plot_avg_return_bar(summary):
 if __name__ == "__main__":
     path = r"data/PAXG_1m_weekend.parquet"  # 改成你的檔案
 
+
     window = 500
-    alpha = 0.7
+    alpha = 0.25
     bin_size_pct = 0.02
 
     df = load_ohlcv_parquet(path)
