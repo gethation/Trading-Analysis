@@ -101,8 +101,8 @@ if __name__ == "__main__":
 
     df, csv_path, pq_path = ccxt_data_fetcher.download_ohlcv_binance_futures(
         symbol="PAXG/USDT",
-        timeframe="5m",
-        since="2025-01-01T00:00:00Z",
+        timeframe="1m",
+        since="2025-12-01T00:00:00Z",
         until="2025-12-30T00:00:00Z",
         exchange=exchange,
         save_dir=data_dir,

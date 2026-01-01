@@ -378,11 +378,11 @@ def plot_p_b_prop(kelly_tbl: pd.DataFrame, bin_step: float = 0.02, kelly_scale: 
 # main
 # ----------------------------
 if __name__ == "__main__":
-    path = r"data/PAXG_5m_weekend.parquet"   # 改成你的檔案
+    path = r"data/PAXG_1m_weekend.parquet"   # 改成你的檔案
 
     # alpha_ma 參數
-    window = 500
-    alpha = 0.75
+    window = 1000
+    alpha = 0.25
 
     # 統計參數
     bin_step_pct = 0.02

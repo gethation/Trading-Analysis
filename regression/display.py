@@ -190,10 +190,10 @@ def save_all_weekend_charts(
 
 if __name__ == "__main__":
     # 你原本的輸入檔
-    path = r"data/PAXG_5m_weekend.parquet"
+    path = r"data/PAXG_1m_weekend.parquet"
     df = load_ohlcv_parquet(path)
 
-    window = 500
+    window = 1000
     alpha = 0.5
 
     end_minutes = 6
