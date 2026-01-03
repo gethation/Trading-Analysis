@@ -244,20 +244,17 @@ def build_trades(df: pd.DataFrame, bin_step_pct: float = 0.02, cutoff_m: int = 3
 # 2D 統計 + heatmap
 # ----------------------------
 def make_2d_stats(trades: pd.DataFrame) -> pd.DataFrame:
-    """
-    回傳 long-form 統計表：
-      index: (dev_bin_pct, hour_bin)
-      columns: n, hit_rate, avg_wait_bars, avg_ret_abs_pct, avg_signed_ret_net
-    """
     g = trades.groupby(["dev_bin_pct", "hour_bin"])
     stats = g.agg(
         n=("hit", "size"),
         hit_rate=("hit", "mean"),
+        win_rate=("signed_ret_net", lambda s: (s > 0).mean()),
         avg_wait_bars=("wait_bars", "mean"),
         avg_ret_abs_pct=("ret_abs_pct", "mean"),
         avg_signed_ret_net=("signed_ret_net", "mean"),
     )
     return stats
+
 
 def plot_heatmap(stats: pd.DataFrame, value_col: str, title: str, vmin=None, vmax=None,
                  scale: float = 1.0, cbar_label: str | None = None):
@@ -312,33 +309,42 @@ if __name__ == "__main__":
     path = r"data/PAXG_1m_weekend.parquet"  # 改成你的檔案
 
     window = 1000
-    alpha = 0.25
+    alpha = 0.5
 
-    bin_step_pct = 0.02
-    cutoff_m = 3
+    bin_step_pct = 0.05
+    cutoff_m = 5
     fee_roundtrip = 0.06 / 100
 
     df = load_ohlcv_parquet(path)
     df = add_alpha_ma(df, window=window, alpha=alpha, cutoff_m=cutoff_m)
 
     trades = build_trades(df, bin_step_pct=bin_step_pct, cutoff_m=cutoff_m, fee_roundtrip=fee_roundtrip)
-    trades = trades[trades["hour_bin"] != 0].copy()
+
+    trades = trades[trades["hour_bin"] >= 1].copy()
+
 
     print("trades:", len(trades))
     print(trades.head())
 
     stats2d = make_2d_stats(trades)
 
-    plot_heatmap(stats2d, "hit_rate",
-             "Hit rate (%) by (time, deviation)",
-             vmin=0, vmax=100,
-             scale=100,
-             cbar_label="hit_rate (%)")
+    # plot_heatmap(stats2d, "hit_rate",
+    #          "Hit rate (%) by (time, deviation)",
+    #          vmin=0, vmax=100,
+    #          scale=100,
+    #          cbar_label="hit_rate (%)")
     
-    plot_heatmap(stats2d, "avg_wait_bars",
-                "Avg wait bars by (time, deviation)")
+    # plot_heatmap(stats2d, "avg_wait_bars",
+    #             "Avg wait bars by (time, deviation)")
 
     plot_heatmap(stats2d, "avg_signed_ret_net",
                 "Avg signed return (net, %) by (time, deviation)",
                 scale=100,
                 cbar_label="avg_signed_ret_net (%)")
+    
+    plot_heatmap(stats2d, "win_rate",
+                "Win rate (%) by (time, deviation)",
+                vmin=0, vmax=100,
+                scale=100,
+                cbar_label="win_rate (%)")
+
