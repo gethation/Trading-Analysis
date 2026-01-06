@@ -93,7 +93,6 @@ class DCA_Strategy(Strategy):
         )
 
         self.potion_cash = 0.0
-        self.tranche_left = 0
 
     def next(self):
         a = self.alpha_ma[-1]

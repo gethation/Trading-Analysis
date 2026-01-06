@@ -146,6 +146,7 @@ def save_all_weekend_charts(
     title_prefix: str = "",
     session_start_hour: int = 17,
     end_minutes: int = 0,
+    plot_last_hours: float = 2,   # ✅ 新增：只畫最後 N 小時
 ):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -153,8 +154,7 @@ def save_all_weekend_charts(
     idx = pd.DatetimeIndex(df.index)
     dow = idx.dayofweek
 
-    # 用「每個 session 的起點」來分組：找所有週五的 session_start
-    # 只取週五 17:00 以後出現過的 session_start，避免平日混進來
+    # 找所有週五 session_start（Fri 17:00）
     session_start = idx.normalize() + pd.Timedelta(hours=session_start_hour)
     is_fri_session = (dow == 4) & (idx >= session_start)
     session_starts = pd.DatetimeIndex(sorted(pd.unique(session_start[is_fri_session])))
@@ -163,29 +163,36 @@ def save_all_weekend_charts(
         print("[INFO] 找不到任何週末 session（沒有週五 17:00 之後的資料）")
         return
 
-    # 預設 MA 欄位：抓出所有 MA 開頭欄位
     if ma_cols is None:
         ma_cols = [c for c in df.columns if c.startswith("MA")]
 
-    # 每個週末的結束時間：Fri 17:00 + 2天 + 1小時 + end_minutes
+    # 週末結束：Fri 17:00 + 2天 + 1小時 + end_minutes
     span = pd.Timedelta(days=2, hours=1, minutes=int(end_minutes))
+
+    last_span = pd.Timedelta(hours=float(plot_last_hours))
 
     for ss in tqdm(session_starts):
         ee = ss + span
 
-        # 含 end：<= ee
-        seg = df[(df.index >= ss) & (df.index <= ee)].copy()
+        # 起點 = max(session start, ee - last_span)
+        plot_start = max(ss, ee - last_span)
+
+        seg = df[(df.index >= plot_start) & (df.index <= ee)].copy()
         if seg.empty:
             continue
 
-        # 檔名：weekend_YYYYMMDD_1700.png
-        fname = f"weekend_{ss:%Y%m%d_%H%M}.png"
+        # 檔名：weekend_YYYYMMDD_1700_last2h.png
+        fname = f"weekend_{ss:%Y%m%d_%H%M}_last{plot_last_hours:g}h.png"
         save_path = out_dir / fname
 
-        title = f"{title_prefix} weekend {ss:%Y-%m-%d %H:%M} ~ {ee:%Y-%m-%d %H:%M}"
+        title = (
+            f"{title_prefix} last {plot_last_hours:g}h "
+            f"({plot_start:%Y-%m-%d %H:%M} ~ {ee:%Y-%m-%d %H:%M})"
+        )
         plot_ohlcv_with_mas(seg, ma_cols=ma_cols, title=title, save_path=save_path)
 
     print(f"[OK] 已輸出週末圖表到: {out_dir.resolve()}")
+
 
 
 if __name__ == "__main__":
@@ -193,10 +200,10 @@ if __name__ == "__main__":
     path = r"data/PAXG_1m_weekend.parquet"
     df = load_ohlcv_parquet(path)
 
-    window = 1000
+    window = 500
     alpha = 0.5
 
-    end_minutes = 6
+    end_minutes = 0
 
     df = add_padded_and_blended_ma_weekend(df, window=window, alpha=alpha, end_minutes=end_minutes)
 
@@ -209,4 +216,6 @@ if __name__ == "__main__":
         ma_cols=ma_cols,
         title_prefix=title_prefix,
         end_minutes=end_minutes,
+        plot_last_hours=2,
     )
+
