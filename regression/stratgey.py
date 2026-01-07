@@ -75,10 +75,10 @@ class DCA_Strategy(Strategy):
     alpha = 0.5
     cutoff_m = 5
     min_dev = 0.25 / 100
-    tranche = 100
+    interval_minutes = 10
 
     def init(self):
-        idx = self.data.index  # DatetimeIndex
+        idx = self.data.index
 
         def alpha_ma_indicator(open_, close, window, alpha, cutoff_m):
             return compute_alpha_ma(idx, open_, close, window, alpha, cutoff_m)
@@ -92,38 +92,75 @@ class DCA_Strategy(Strategy):
             self.cutoff_m
         )
 
-        self.potion_cash = 0.0
+        self.portion_cash = 0.0
+        self.tranches = int(49 * 60 // self.interval_minutes)
+        self.session_bar = 0
+
+    def _in_session(self, t: pd.Timestamp) -> bool:
+        dow = t.dayofweek
+        mins = t.hour * 60 + t.minute
+        cutoff = 18 * 60 + self.cutoff_m
+        return (
+            ((dow == 4) and (mins >= 17 * 60)) or
+            (dow == 5) or
+            ((dow == 6) and (mins < cutoff))
+        )
+    
+    def _on_cutoff_minutes(self, t: pd.Timestamp) -> bool:
+        mins = t.hour * 60 + t.minute
+        cutoff_mins = 18 * 60 + self.cutoff_m - 2
+        return t.dayofweek == 6 and mins == cutoff_mins
+    
+    def _on_start_minutes(self, t: pd.Timestamp) -> bool:
+        mins = t.hour * 60 + t.minute
+        start_mins = 17 * 60 + 1
+        return t.dayofweek == 4 and mins == start_mins
 
     def next(self):
+        ts = self.data.index[-1]
         a = self.alpha_ma[-1]
-        a_prev = self.alpha_ma[-2] if len(self.alpha_ma) > 1 else np.nan
 
         # --- out of session ---
-        if np.isnan(a):
-            if not np.isnan(a_prev) and self.position:
+        if not self._in_session(ts): return
+
+        if self._on_cutoff_minutes(ts):
+            for tr in self.trades:
+                tr.tp = None
+                tr.sl = None
+
+            for o in self.orders:
+                o.cancel()
+
+            if self.position:
                 self.position.close()
             return
 
         # --- session start ---
-        if np.isnan(a_prev):
+        if self._on_start_minutes(ts):
+            self.session_bar = 0
             cash = self._broker._cash
-            self.potion_cash = cash / float(self.tranche)
-            self.tranche_left = self.tranche
+            self.portion_cash = cash / float(self.tranches)
+
+        for t in self.trades:
+            t.tp = float(a)
+
+        self.session_bar += 1
+        if (self.session_bar - 1) % self.interval_minutes != 0:
+            return
 
         price = float(self.data.Close[-1])
         deviation = abs((price - a) / a)
-
         if deviation < self.min_dev:
             return
-        
-        qty = self.potion_cash / price
+
+        qty = round(self.portion_cash / price)
 
         if price > a:
-            self.sell(size=qty)
-            self.tranche_left -= 1
+            self.sell(size=qty, tp=float(a))
+            # print(ts, "sell", round(price, 2))
         elif price < a:
-            self.buy(size=qty)
-            self.tranche_left -= 1
+            self.buy(size=qty, tp=float(a))
+            # print(ts, "buy ", round(price, 2))
 
         
 

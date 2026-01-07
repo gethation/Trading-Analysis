@@ -203,7 +203,7 @@ if __name__ == "__main__":
     window = 500
     alpha = 0.5
 
-    end_minutes = 0
+    end_minutes = 10
 
     df = add_padded_and_blended_ma_weekend(df, window=window, alpha=alpha, end_minutes=end_minutes)
 
