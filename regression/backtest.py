@@ -1,6 +1,16 @@
 import pandas as pd
 from backtesting import Backtest
-from stratgey import DCA_Strategy
+from optimized_strategy import DCA_Strategy
+
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Data contains too many candlesticks to plot; downsampling to .*",
+    category=UserWarning,
+    module=r"backtesting\._plotting"
+)
+
 
 def load_data(path):
     df = pd.read_parquet(path)
@@ -20,14 +30,15 @@ def load_data(path):
 
 if __name__ == "__main__":
     df = load_data(r"data\PAXG_1m_weekend.parquet")
-    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.04/100)
+    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.03/100, margin = 0.02)
     stats = bt.run(window = 1000, 
                 alpha = 0.5, 
                 cutoff_m = 5,
-                min_dev = 0.25 / 100,
-                interval_minutes = 10)
+                min_dev = 0.10 / 100,
+                interval_minutes = 10,
+                open_time_proportion = 0.6)
     print(stats)
-    trades = stats['_trades']
-    print("num trades:", len(trades))
-    print(trades[['EntryTime','ExitTime','EntryPrice','ExitPrice','Size','PnL']].tail(20))
+    # trades = stats['_trades']
+    # print("num trades:", len(trades))
+    # print(trades[['EntryTime','ExitTime','EntryPrice','ExitPrice','Size','PnL']].tail(20))
     bt.plot(filename=r"regression\reports\Strategy.html")
