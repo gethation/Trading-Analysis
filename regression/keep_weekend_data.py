@@ -100,7 +100,7 @@ if __name__ == "__main__":
         symbol="PAXG/USDT",
         timeframe="1m",
         since="2025-01-01T00:00:00Z",
-        until="2026-01-06T00:00:00Z",
+        until="2026-01-22T00:00:00Z",
         exchange=exchange,
         save_dir=data_dir,
         mark="",

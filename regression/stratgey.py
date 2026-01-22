@@ -96,6 +96,9 @@ class DCA_Strategy(Strategy):
         self.tranches = int(49 * 60 // self.interval_minutes)
         self.session_bar = 0
 
+        self.session_start_cash = {}   # {session_start_ts: cash}
+        self.session_start_ts = None
+
     def _in_session(self, t: pd.Timestamp) -> bool:
         dow = t.dayofweek
         mins = t.hour * 60 + t.minute
@@ -141,6 +144,9 @@ class DCA_Strategy(Strategy):
             cash = self._broker._cash
             self.portion_cash = cash / float(self.tranches)
 
+            self.session_start_ts = ts.normalize() + pd.Timedelta(hours=17, minutes=1)
+            self.session_start_cash[self.session_start_ts] = float(cash)
+
         for t in self.trades:
             t.tp = float(a)
 
@@ -154,6 +160,7 @@ class DCA_Strategy(Strategy):
             return
 
         qty = round(self.portion_cash / price)
+        print()
 
         if price > a:
             self.sell(size=qty, tp=float(a))

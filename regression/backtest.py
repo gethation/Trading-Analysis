@@ -28,17 +28,17 @@ def load_data(path):
 
     return df
 
+
 if __name__ == "__main__":
     df = load_data(r"data\PAXG_1m_weekend.parquet")
-    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.03/100, margin = 0.02)
-    stats = bt.run(window = 1000, 
-                alpha = 0.5, 
-                cutoff_m = 5,
-                min_dev = 0.10 / 100,
-                interval_minutes = 10,
-                open_time_proportion = 0.6)
+    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.01/100)
+    stats = bt.run(
+        window=1000,
+        alpha=0.5,
+        cutoff_m=5,
+        min_dev=0.15 / 100,
+        interval_minutes=10,
+        open_time_proportion=0.5
+    )
     print(stats)
-    # trades = stats['_trades']
-    # print("num trades:", len(trades))
-    # print(trades[['EntryTime','ExitTime','EntryPrice','ExitPrice','Size','PnL']].tail(20))
     bt.plot(filename=r"regression\reports\Strategy.html")

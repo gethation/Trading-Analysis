@@ -3,6 +3,7 @@ import pandas as pd
 from collections import deque
 from backtesting import Strategy
 
+
 def compute_alpha_ma(index, open_, close, window: int = 500, alpha: float = 0.7, cutoff_m: int = 3):
     """
     完整復刻你專案 regression/deviation_bin_probability.py 的 add_alpha_ma 邏輯，
@@ -71,6 +72,7 @@ def compute_alpha_ma(index, open_, close, window: int = 500, alpha: float = 0.7,
 
     return out
 
+
 class DCA_Strategy(Strategy):
     window = 500
     alpha = 0.5
@@ -121,25 +123,22 @@ class DCA_Strategy(Strategy):
         return t.dayofweek == 4 and mins == start_mins
 
     def _minutes_since_fri_17(self, ts: pd.Timestamp) -> int:
-
         # ts.dayofweek: Mon=0 ... Sun=6
         delta_days = ts.dayofweek - 4  # Fri=4
         if delta_days < 0:
-            delta_days = 0  # 若你只在 session 內呼叫，其實不會發生
+            delta_days = 0
 
         session_start = ts.normalize() + pd.Timedelta(hours=17) - pd.Timedelta(days=delta_days)
         return int((ts - session_start) / pd.Timedelta(minutes=1))
 
-    
     def _time_factor(self, passed_mins: int) -> float:
         if passed_mins / (49 * 60) > self.open_time_proportion:
             return 0.0
-        else: return 1.0
+        else:
+            return 1.0
 
     def _dev_factor(self, deviation: float) -> float:
-        return min(deviation * 100 - 0.2, 1.0
-
-    
+        return max(min(deviation * 100 -0.1, 1.0), 0)
 
     def next(self):
         ts = self.data.index[-1]
@@ -174,9 +173,8 @@ class DCA_Strategy(Strategy):
             portion_cash = cash / float(n_open)
 
             self.portion_cash_q = deque(
-                [portion_cash] * (n_open+1) + [0.0] * (self.tranches - n_open)
+                [portion_cash] * (n_open + 1) + [0.0] * (self.tranches - n_open)
             )
-            # print(self.portion_cash_q)
 
         for tr in self.trades:
             tr.tp = float(a)
@@ -191,22 +189,16 @@ class DCA_Strategy(Strategy):
         deviation = abs((price - a) / a)
         if deviation < self.min_dev:
             return
-        
+
         used_potion = self._dev_factor(deviation) * self._time_factor(passed_mins)
 
-        qty = int(self.accumulation_cash * used_potion / price) * 50
+        qty = int(self.accumulation_cash * used_potion / price)
         if qty == 0:
             return
 
-        self.accumulation_cash -= qty//50 * price
-        # print(qty, used_potion)
+        self.accumulation_cash -= qty * price
 
         if price > a:
             self.sell(size=qty, tp=float(a))
         else:
             self.buy(size=qty, tp=float(a))
-
-        
-
-
-
