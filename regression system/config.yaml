@@ -1,0 +1,21 @@
+exchange: binance
+market_type: future
+symbol: "PAXG/USDT"
+timeframe: "1m"
+tz: "America/New_York"
+
+quote: "USDT"
+poll_seconds: 10
+max_bars: 3000
+
+strategy:
+  window: 1000
+  alpha: 0.5
+  cutoff_m: 5
+  min_dev: 0.0015
+  interval_minutes: 10
+  open_time_proportion: 0.5
+
+risk:
+  max_notional_per_order: 200.0
+  disable_trading: false
