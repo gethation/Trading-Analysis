@@ -78,7 +78,8 @@ class DCA_Strategy(Strategy):
     alpha = 0.5
     cutoff_m = 5
 
-    min_dev = 0.25 / 100
+    above_min_dev=0.15 / 100,
+    below_min_dev=0.10 / 100
     interval_minutes = 10
     open_time_proportion = 0.25
 
@@ -137,8 +138,13 @@ class DCA_Strategy(Strategy):
         else:
             return 1.0
 
-    def _dev_factor(self, deviation: float) -> float:
-        return max(min(deviation * 100 -0.1, 1.0), 0)
+    def _dev_factor(self, deviation: float, side: str) -> float:
+        if side == "above":
+            if deviation < self.above_min_dev: return 0.0
+            else: return max(min(deviation * 100 -0.1, 1.0), 0)
+        if side == "below":
+            if deviation < self.below_min_dev: return 0.0
+            else: return max(min(deviation * 100 +0.1, 1.0), 0)
 
     def next(self):
         ts = self.data.index[-1]
@@ -187,10 +193,9 @@ class DCA_Strategy(Strategy):
 
         price = float(self.data.Close[-1])
         deviation = abs((price - a) / a)
-        if deviation < self.min_dev:
-            return
+        side = "above" if price - a >= 0 else "below"
 
-        used_potion = self._dev_factor(deviation) * self._time_factor(passed_mins)
+        used_potion = self._dev_factor(deviation, side) * self._time_factor(passed_mins)
 
         qty = int(self.accumulation_cash * used_potion / price)
         if qty == 0:

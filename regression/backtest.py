@@ -31,12 +31,13 @@ def load_data(path):
 
 if __name__ == "__main__":
     df = load_data(r"data\PAXG_1m_weekend.parquet")
-    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.01/100)
+    bt = Backtest(df, DCA_Strategy, cash=1_000_000_000, commission=0.03/100)
     stats = bt.run(
         window=1000,
         alpha=0.5,
-        cutoff_m=5,
-        min_dev=0.15 / 100,
+        cutoff_m=10,
+        above_min_dev=0.15 / 100,
+        below_min_dev=0.15 / 100,
         interval_minutes=10,
         open_time_proportion=0.5
     )
