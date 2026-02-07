@@ -7,7 +7,7 @@ if str(ROOT) not in sys.path:
 
 import pandas as pd
 import ccxt
-import ccxt_data_fetcher
+import ccxt_binance_fetcher
 
 
 def load_df_from_parquet(path: str) -> pd.DataFrame:
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         "options": {"defaultType": "future"},
     })
 
-    df, csv_path, pq_path = ccxt_data_fetcher.download_ohlcv_binance_futures(
+    df, csv_path, pq_path = ccxt_binance_fetcher.download_ohlcv_binance_futures(
         symbol="PAXG/USDT",
         timeframe="1m",
         since="2025-10-15T00:00:00Z",

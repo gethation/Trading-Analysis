@@ -7,7 +7,32 @@ import pandas as pd
 from tqdm.rich import tqdm
 
 
-def download_ohlcv_binance_futures(
+def resolve_bybit_swap_symbol(exchange: ccxt.Exchange, base: str, quote: str = "USDT") -> str:
+    """
+    Resolve unified CCXT symbol for Bybit linear perpetual (swap).
+    Typical symbol formats on Bybit in CCXT:
+      - BASE/USDT:USDT   (most common for linear perpetual)
+      - BASE/USDT        (rare for swap; more common for spot)
+    """
+    exchange.load_markets()
+
+    candidates = [
+        f"{base}/{quote}:USDT",
+        f"{base}/{quote}:{quote}",
+        f"{base}/{quote}",
+    ]
+    for s in candidates:
+        if s in exchange.markets:
+            return s
+
+    hits = [s for s in exchange.symbols if s.startswith(f"{base}/{quote}")]
+    raise ValueError(
+        f"Bybit swap symbol not found for base={base}, quote={quote}. "
+        f"Tried: {candidates}. Matches (first 30): {hits[:30]}"
+    )
+
+
+def download_ohlcv_ccxt(
     symbol: str,
     timeframe: str = "1m",
     since: Union[str, int] = None,
@@ -24,39 +49,37 @@ def download_ohlcv_binance_futures(
     show_pbar: bool = True,
 ) -> Tuple[pd.DataFrame, Optional[Path], Optional[Path]]:
     """
-    下載 Binance Futures OHLCV，回傳 DataFrame，並可選擇存成 CSV/Parquet。
+    下載任意 CCXT 交易所的 OHLCV（你現在用 Bybit 永續也適用），回傳 DataFrame，並可選擇存成 CSV/Parquet。
 
-    參數
-    - symbol: e.g. 'PAXG/USDT'
-    - timeframe: e.g. '1m'
-    - since/until: 可傳 ISO8601 字串或毫秒 timestamp(int)
-      - since: 必填(建議給)，until: 可選(不含 until 那根，與你原碼一致：candle[0] < until)
-    - exchange: 可傳入已建好的 ccxt binance instance；不傳就自動建立 futures
-    - limit: 每批抓多少根（Binance 常見上限 1000）
-    - tz: 轉換到的時區（會轉成 naive datetime，與你原碼一致）
-    - save_dir: 存檔資料夾
-    - mark: 檔名後綴標記
-    - save_csv/save_parquet: 是否輸出檔案
-    - show_pbar: 是否顯示 tqdm 進度條
-
-    回傳
-    - df, csv_path, parquet_path（若未存檔則為 None）
+    - symbol: CCXT unified symbol (Bybit 永續常見：'PAXG/USDT:USDT')
+    - since/until: ISO8601 字串或毫秒 timestamp(int)
+      - until 不包含那根（與你原本邏輯一致：candle[0] < until）
     """
     if since is None:
         raise ValueError("since 不能是 None，請提供開始時間（ISO8601 或毫秒 timestamp）")
 
-    # exchange：可重用外部傳入的（例如你想設定 proxy / api key 等）
     if exchange is None:
-        exchange = ccxt.binance({
-            "enableRateLimit": True,
-            "options": {"defaultType": "future"},
-        })
+        # 你想抓 Bybit 永續就不要用這個預設；建議外面傳入 bybit(exchange)
+        exchange = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "future"}})
+
+    exchange.load_markets()
+    if symbol not in exchange.markets:
+        # 提供一些可能的候選，尤其是 Bybit swap 很常需要 :USDT
+        base = symbol.split("/")[0] if "/" in symbol else symbol
+        candidates = [s for s in exchange.symbols if base in s]
+        raise ValueError(
+            f"Symbol '{symbol}' not found on exchange '{exchange.id}'. "
+            f"Candidates containing '{base}' (first 30): {candidates[:30]}"
+        )
 
     def to_ms(x: Union[str, int]) -> int:
         if isinstance(x, int):
             return x
         if isinstance(x, str):
-            return exchange.parse8601(x)
+            ms = exchange.parse8601(x)
+            if ms is None:
+                raise ValueError(f"無法 parse8601: {x}")
+            return ms
         raise TypeError(f"since/until 只接受 str 或 int，現在是 {type(x)}")
 
     since_ms = to_ms(since)
@@ -77,7 +100,7 @@ def download_ohlcv_binance_futures(
 
     pbar = None
     if show_pbar:
-        pbar = tqdm(total=total_iters, desc=f"Fetching {symbol} {timeframe}", dynamic_ncols=True, unit="batch")
+        pbar = tqdm(total=total_iters, desc=f"Fetching {exchange.id} {symbol} {timeframe}", dynamic_ncols=True, unit="batch")
 
     all_ohlcv = []
     cursor = since_ms
@@ -90,11 +113,10 @@ def download_ohlcv_binance_futures(
             current_limit = max(1, int(remaining_candles))
 
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe, cursor, current_limit)
-
         if not ohlcv:
             break
 
-        # 與你原碼一致：until 不包含那根（< until）
+        # until 不包含那根（< until）
         if until_ms is not None:
             ohlcv = [c for c in ohlcv if c[0] < until_ms]
             if not ohlcv:
@@ -126,18 +148,20 @@ def download_ohlcv_binance_futures(
     df.index.name = "datetime"
     df = df.sort_index()
 
+    # 去重（保留最後一筆）
+    dup = df.index.duplicated(keep="last")
+    if dup.any():
+        df = df[~dup]
+
     csv_path = None
     pq_path = None
 
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    df = df.sort_index()
-    dup = df.index.duplicated(keep="last")
-    if dup.any():
-        df = df[~dup]
-
-    base_name = f"{symbol.split('/')[0]}_{timeframe}"
+    # 讓檔名不受 symbol 的 :USDT 影響（Windows 冒號不能在檔名中）
+    base = symbol.split("/")[0]
+    base_name = f"{base}_{timeframe}"
     if mark:
         base_name = f"{base_name}({mark})"
 
@@ -153,21 +177,27 @@ def download_ohlcv_binance_futures(
 
 
 if __name__ == "__main__":
-    exchange = ccxt.binance({
+    # Bybit 永續（perpetual / swap）
+    exchange = ccxt.bybit({
         "enableRateLimit": True,
-        "options": {"defaultType": "future"},
+        "options": {
+            "defaultType": "swap",  # 永續請用 swap
+        },
     })
 
-    df, csv_path, pq_path = download_ohlcv_binance_futures(
-        symbol="PAXG/USDT",
+    base = "XAUT"
+    symbol = resolve_bybit_swap_symbol(exchange, base, "USDT")
+    print("Resolved symbol:", symbol)
+
+    df, csv_path, pq_path = download_ohlcv_ccxt(
+        symbol=symbol,
         timeframe="5m",
-        since="2025-12-20T00:00:00Z",
-        until="2025-12-26T00:00:00Z",
+        since="2025-04-01T00:00:00Z",
+        until="2026-01-24T00:00:00Z",
         exchange=exchange,
         save_dir="data",
-        mark="",
+        mark="bybit_swap",
     )
 
-    print(df.head())
     print("CSV:", csv_path)
     print("Parquet:", pq_path)
