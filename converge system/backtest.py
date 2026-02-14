@@ -34,8 +34,8 @@ def run_backtest(
     cerebro.addstrategy(
         PairsMeanReversion,
         lookback=1000,
-        entry_z=2.5,
-        exit_z=-0.5,
+        entry_z=2.0,
+        exit_buffer_z=1.5,
         stop_z=100.0,
         leg_cash=45000.0,
         hedge_beta=1.0,

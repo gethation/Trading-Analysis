@@ -266,7 +266,7 @@ def main():
     ma = 1000
 
     # 均線：用 ratio_close 算 SMA(20/60)
-    df = add_ma_columns(df, close_col="ratio_close", windows=(ma,21), kind="sma")
+    df = add_ma_columns(df, close_col="ratio_close", windows=(ma, 9), kind="sma")
 
     assume_tz = "America/New_York"  # 跟你抓資料的交易所時間一致即可（或直接用 UTC）
 
@@ -281,7 +281,7 @@ def main():
 
     ma_series = {
         f"MA{ma}": to_lwc_line(df, f"ma{ma}", assume_tz=assume_tz),
-        f"MA{9}": to_lwc_line(df, f"ma{21}", assume_tz=assume_tz),
+        f"MA{9}": to_lwc_line(df, f"ma{9}", assume_tz=assume_tz),
     }
 
     out_html = Path("data/ratio_candle_chart.html")

@@ -50,17 +50,12 @@ class PairsMeanReversion(bt.Strategy):
     params = dict(
         lookback=1000,
         entry_z=3.0,
-        exit_z=0.0,
+
+        exit_buffer_z=0.5,
+
         stop_z=4.0,
 
-        # 每一邊（leg）投入的名目金額（美元中性）
-        # 例如 leg_cash=1000：進場會讓 PAXG 這邊約 1000 USD notional，
-        # XAUT 這邊約 1000 USD notional
         leg_cash=1000.0,
-
-        # 如果你想要 XAUT 做 hedge ratio（例如 beta!=1），可以改這裡
-        # short spread: -PAXG + hedge_beta*XAUT
-        # long  spread: +PAXG - hedge_beta*XAUT
         hedge_beta=1.0,
 
         allow_flip=True,
@@ -85,6 +80,8 @@ class PairsMeanReversion(bt.Strategy):
         self.std = bt.ind.StdDev(self.ratio, period=self.p.lookback)
         self.z = (self.ratio - self.mean) / (self.std + 1e-12)
 
+        self.cross = bt.ind.CrossOver(self.ratio, self.mean)
+
         self.ord_paxg = None
         self.ord_xaut = None
 
@@ -104,18 +101,12 @@ class PairsMeanReversion(bt.Strategy):
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log(f"{order.data._name} Order Canceled/Margin/Rejected")
 
-        # 清掉對應 handle
         if order.data is self.paxg:
             self.ord_paxg = None
         elif order.data is self.xaut:
             self.ord_xaut = None
 
     def _target_sizes(self) -> tuple[float, float]:
-        """
-        回傳 (paxg_size, xaut_size)，以美元中性下單：
-          paxg_size = leg_cash / paxg_price
-          xaut_size = leg_cash / xaut_price * hedge_beta
-        """
         paxg_px = float(self.paxg.close[0])
         xaut_px = float(self.xaut.close[0])
         if paxg_px <= 0 or xaut_px <= 0:
@@ -126,7 +117,6 @@ class PairsMeanReversion(bt.Strategy):
         return paxg_size, xaut_size
 
     def _close_both(self):
-        # 平倉：兩邊都 close
         if self.getposition(self.paxg).size != 0:
             self.ord_paxg = self.close(data=self.paxg)
         if self.getposition(self.xaut).size != 0:
@@ -151,11 +141,24 @@ class PairsMeanReversion(bt.Strategy):
             self._close_both()
             return
 
-        # --- 出場：回到均值附近 ---
-        if in_market and abs(z) <= self.p.exit_z:
-            self.log(f"EXIT: z={z:.3f}")
-            self._close_both()
-            return
+        if in_market:
+            is_long_spread = (pos_p > 0 and pos_x < 0)   # BUY PAXG, SELL XAUT
+            is_short_spread = (pos_p < 0 and pos_x > 0)  # SELL PAXG, BUY XAUT
+            buf = float(self.p.exit_buffer_z)
+
+            if is_long_spread:
+                # ratio 上穿均線（cross>0）且 z >= +buf 才出
+                if self.cross[0] > 0 and z >= buf:
+                    self.log(f"EXIT LONG (cross+buffer): z={z:.3f} >= {buf}")
+                    self._close_both()
+                    return
+
+            if is_short_spread:
+                # ratio 下穿均線（cross<0）且 z <= -buf 才出
+                if self.cross[0] < 0 and z <= -buf:
+                    self.log(f"EXIT SHORT (cross+buffer): z={z:.3f} <= {-buf}")
+                    self._close_both()
+                    return
 
         # --- 進場 ---
         if not in_market:
@@ -163,14 +166,12 @@ class PairsMeanReversion(bt.Strategy):
             if paxg_size == 0 or xaut_size == 0:
                 return
 
-            # z 高：short spread = SELL PAXG, BUY XAUT
             if z >= self.p.entry_z:
                 self.log(f"ENTRY SHORT SPREAD: z={z:.3f} (SELL PAXG, BUY XAUT)")
                 self.ord_paxg = self.sell(data=self.paxg, size=paxg_size)
                 self.ord_xaut = self.buy(data=self.xaut, size=xaut_size)
                 return
 
-            # z 低：long spread = BUY PAXG, SELL XAUT
             if z <= -self.p.entry_z:
                 self.log(f"ENTRY LONG SPREAD: z={z:.3f} (BUY PAXG, SELL XAUT)")
                 self.ord_paxg = self.buy(data=self.paxg, size=paxg_size)
@@ -181,12 +182,11 @@ class PairsMeanReversion(bt.Strategy):
 
         # --- 反向翻倉（可選）---
         if self.p.allow_flip:
-            # 如果你已經在 long spread（PAXG>0, XAUT<0）但 z 又飆到 +entry：先平倉，下一根再進場
             if pos_p > 0 and pos_x < 0 and z >= self.p.entry_z:
                 self.log(f"FLIP requested -> close (z={z:.3f})")
                 self._close_both()
                 return
-            # short spread 反向
+
             if pos_p < 0 and pos_x > 0 and z <= -self.p.entry_z:
                 self.log(f"FLIP requested -> close (z={z:.3f})")
                 self._close_both()
