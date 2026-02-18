@@ -49,11 +49,11 @@ def load_merged_df(path: Path) -> pd.DataFrame:
 class PairsMeanReversion(bt.Strategy):
     params = dict(
         lookback=1000,
-        entry_z=3.0,
+        entry_z=2.0,
 
-        exit_buffer_z=0.5,
+        exit_buffer_z=1.5,
 
-        stop_z=4.0,
+        stop_z=5.0,
 
         leg_cash=1000.0,
         hedge_beta=1.0,

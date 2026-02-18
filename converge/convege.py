@@ -31,8 +31,8 @@ def compute_sym_spread_ratio(
 
 def main():
     timeframe = "1m"
-    since = "2025-12-15T00:00:00Z"
-    until = "2026-02-07T00:00:00Z"
+    since = "2025-04-01T00:00:00Z"
+    until = "2026-02-01T00:00:00Z"
     tz = "America/New_York"  # 你抓資料那邊如果有固定 tz，這裡也要一致
     out_dir = Path("data")
     out_dir.mkdir(parents=True, exist_ok=True)

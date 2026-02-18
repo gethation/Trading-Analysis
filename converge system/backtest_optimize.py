@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import itertools
 import numpy as np
@@ -163,18 +164,22 @@ def sweep_heatmap_mp(
 
 if __name__ == "__main__":
     entry_grid = np.arange(1.5, 3.0, 0.5)
-    exit_grid = np.arange(0.0, 2.5, 0.5)
+    exit_grid = np.arange(0.5, 2.5, 0.5)
+    p = argparse.ArgumentParser()
+    p.add_argument("lookback")
+    args = p.parse_args()
+    lookback = 500
 
     sweep_heatmap_mp(
         entry_grid=entry_grid,
         exit_grid=exit_grid,
         data_path="data/spread_ratio_PAXG_XAUT_1m.parquet",
         cash=100000.0,
-        commission=0.02/100,
-        lookback=1000,
+        commission=0.01/100,
+        lookback=args.lookback,
         stop_z=100.0,
         leg_cash=45000.0,
         hedge_beta=1.0,
         max_workers=16,
-        save_csv="grid_results.csv",
+        save_csv=f"grid_results_lb={args.lookback}.csv",
     )

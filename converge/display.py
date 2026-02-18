@@ -114,6 +114,37 @@ def add_ma_columns(
     return out
 
 
+def add_mean_std_band_columns(
+    df: pd.DataFrame,
+    close_col: str = "ratio_close",
+    lookback: int = 1000,
+    entry_z: float = 3.0,
+    exit_z: float = 0.5,
+) -> pd.DataFrame:
+    """
+    Add rolling mean/std and mean±std*z bands (entry/exit) as new columns.
+
+    Columns:
+      - mean, std
+      - entry_upper, entry_lower
+      - exit_upper, exit_lower
+    """
+    out = df.copy()
+    mean = out[close_col].rolling(lookback, min_periods=lookback).mean()
+    std = out[close_col].rolling(lookback, min_periods=lookback).std(ddof=0)
+
+    out["mean"] = mean
+    out["std"] = std
+
+    out["entry_upper"] = mean + std * float(entry_z)
+    out["entry_lower"] = mean - std * float(entry_z)
+
+    out["exit_upper"] = mean + std * float(exit_z)
+    out["exit_lower"] = mean - std * float(exit_z)
+
+    return out
+
+
 def to_lwc_line(
     df: pd.DataFrame,
     col: str,
@@ -140,7 +171,7 @@ def to_lwc_line(
 def write_html_candles(
     out_html: Path,
     candle_data: list[dict],
-    ma_series: dict[str, list[dict]],
+    ma_series: dict[str, object],  # value: list[dict] OR {data, options}
     title: str = "Ratio Candle: (PAXG - XAUT) / (PAXG + XAUT) * 200",
 ) -> None:
     data_json = json.dumps(candle_data, ensure_ascii=False)
@@ -222,7 +253,7 @@ def write_html_candles(
   }});
   candleSeries.setData(candleData);
 
-  // 0% reference line
+  // 0% reference line (keep your original if needed)
   candleSeries.createPriceLine({{
     price: 0.208,
     color: 'rgba(255,255,255,0.9)',
@@ -232,13 +263,30 @@ def write_html_candles(
     title: '0%',
   }});
 
-  // MA overlays (line series)
-  for (const [name, data] of Object.entries(maSeries)) {{
+  // Overlays (line series): MA / mean-std bands
+  // Each entry can be:
+  //   - an array of points: [{{time, value}}, ...]
+  //   - or an object: {{ data: [...], options: {{...lineSeriesOptions}} }}
+  for (const [name, spec] of Object.entries(maSeries)) {{
+    const data = Array.isArray(spec) ? spec : (spec.data || []);
+    const extraRaw = Array.isArray(spec) ? {{}} : (spec.options || {{}});
+    const extra = {{ ...extraRaw }};
+
+    // allow lineStyle to be specified as a string for JSON-serializable configs
+    // e.g. "dashed" | "dotted" | "solid"
+    if (typeof extra.lineStyle === 'string') {{
+      const ls = extra.lineStyle.toLowerCase();
+      if (ls === 'dashed') extra.lineStyle = LightweightCharts.LineStyle.Dashed;
+      else if (ls === 'dotted') extra.lineStyle = LightweightCharts.LineStyle.Dotted;
+      else extra.lineStyle = LightweightCharts.LineStyle.Solid;
+    }}
+
     const s = chart.addLineSeries({{
       lineWidth: 2,
       title: name,
       priceLineVisible: false,
       lastValueVisible: true,
+      ...extra,
     }});
     s.setData(data);
   }}
@@ -259,14 +307,30 @@ def write_html_candles(
     out_html.write_text(html, encoding="utf-8")
 
 
+
 def main():
     # 改成你的檔案路徑
     infile = Path("data/spread_ratio_PAXG_XAUT_1m.parquet")
     df = load_ratio_df(infile)
-    ma = 1000
 
-    # 均線：用 ratio_close 算 SMA(20/60)
-    df = add_ma_columns(df, close_col="ratio_close", windows=(ma, 9), kind="sma")
+    # === Strategy params (sync with mean_reversion_strat.py) ===
+    lookback = 1000
+    entry_z = 2.0
+    # In mean_reversion_strat.py this is `exit_buffer_z` (z-threshold around mean).
+    # We visualize it as mean ± std * exit_z.
+    exit_z = 5.0
+
+    # 均線：用 ratio_close 算 SMA
+    df = add_ma_columns(df, close_col="ratio_close", windows=(lookback,), kind="sma")
+
+    # Mean/std bands (mean ± std*z)
+    df = add_mean_std_band_columns(
+        df,
+        close_col="ratio_close",
+        lookback=lookback,
+        entry_z=entry_z,
+        exit_z=exit_z,
+    )
 
     assume_tz = "America/New_York"  # 跟你抓資料的交易所時間一致即可（或直接用 UTC）
 
@@ -280,8 +344,48 @@ def main():
     )
 
     ma_series = {
-        f"MA{ma}": to_lwc_line(df, f"ma{ma}", assume_tz=assume_tz),
-        f"MA{9}": to_lwc_line(df, f"ma{9}", assume_tz=assume_tz),
+        f"MA{lookback}": to_lwc_line(df, f"ma{lookback}", assume_tz=assume_tz),
+        # "MA3": to_lwc_line(df, "ma3", assume_tz=assume_tz),
+
+        # --- Mean ± std * entry_z (white dashed) ---
+        f"Entry +{entry_z}σ": {
+            "data": to_lwc_line(df, "entry_upper", assume_tz=assume_tz),
+            "options": {
+                "color": "rgba(255,255,255,0.9)",
+                "lineWidth": 1,
+                "lineStyle": "dashed",
+                "lastValueVisible": False,
+            },
+        },
+        f"Entry -{entry_z}σ": {
+            "data": to_lwc_line(df, "entry_lower", assume_tz=assume_tz),
+            "options": {
+                "color": "rgba(255,255,255,0.9)",
+                "lineWidth": 1,
+                "lineStyle": "dashed",
+                "lastValueVisible": False,
+            },
+        },
+
+        # --- Mean ± std * exit_z (red dashed) ---
+        f"Exit +{exit_z}σ": {
+            "data": to_lwc_line(df, "exit_upper", assume_tz=assume_tz),
+            "options": {
+                "color": "rgba(255,0,0,0.9)",
+                "lineWidth": 1,
+                "lineStyle": "dashed",
+                "lastValueVisible": False,
+            },
+        },
+        f"Exit -{exit_z}σ": {
+            "data": to_lwc_line(df, "exit_lower", assume_tz=assume_tz),
+            "options": {
+                "color": "rgba(255,0,0,0.9)",
+                "lineWidth": 1,
+                "lineStyle": "dashed",
+                "lastValueVisible": False,
+            },
+        },
     }
 
     out_html = Path("data/ratio_candle_chart.html")
